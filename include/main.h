@@ -7,5 +7,8 @@
 
 extern TFT_eSPI tft;
 extern XPT2046_Touchscreen touchscreen;
+#define SCREEN_WIDTH 320
+#define SCREEN_HEIGHT 240
+#define FONT_SIZE 2
 
 #endif

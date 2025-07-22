@@ -1,12 +1,31 @@
 #include "wifi_suite.h"
 #include <WiFi.h>
+// #include <module.h>
 
-int wifi_init() {
-  // WiFi.begin("ssid", "password");
-  // while (WiFi.status() != WL_CONNECTED) {
-    // Serial.print("Wifi not connected, retrying...");
-    // delay(1000);
-  // }
+// class WiFiModule : public Module {
+//   public:
+//     String getName() const override {
+//       return "WiFi Module";
+//     }
 
-  return 0;
-}
+//     void init() override {
+//       WiFi.mode(WIFI_STA);
+//       WiFi.begin("your-ssid", "your-password");
+//     }
+
+//     String getInfo() const override {
+//       return "WiFi Status: " + String(WiFi.status());
+//     }
+
+//     void run() override {
+//       if (WiFi.status() == WL_CONNECTED) {
+//         Serial.println("WiFi connected");
+//       } else {
+//         Serial.println("WiFi not connected");
+//       }
+//     }
+
+//     void cleanup() override {
+//       WiFi.disconnect();
+//     }
+// };

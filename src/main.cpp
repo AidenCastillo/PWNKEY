@@ -23,9 +23,14 @@
 #include <debug.h>
 #include <wifi_suite.h>
 #include <ble_suite.h>
+// #include <module.h>
 
 // Global TFT display object for all files
 TFT_eSPI tft = TFT_eSPI();
+Module *modules[] = {
+  new WiFiModule(),
+  new BLEModule()
+};
 
 // Touchscreen pins
 #define XPT2046_IRQ 36   // T_IRQ
@@ -36,10 +41,6 @@ TFT_eSPI tft = TFT_eSPI();
 
 SPIClass touchscreenSPI = SPIClass(VSPI);
 XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
-
-#define SCREEN_WIDTH 320
-#define SCREEN_HEIGHT 240
-#define FONT_SIZE 2
 
 // Touchscreen coordinates: (x, y) and pressure (z)
 int x, y, z;
@@ -101,20 +102,20 @@ void setup() {
 
   // Begin PWNKEY initialization
   debug_init();
-  if (wifi_init() == 0) {
-    Serial.println("WiFi initialized successfully.");
-    debug_to_screen("WiFi initialized successfully.");
-  } else {
-    Serial.println("Failed to initialize WiFi.");
-    debug_to_screen("Failed to initialize WiFi.");
-  }
-  if (ble_init() == 0) {
-    Serial.println("BLE initialized successfully.");
-    debug_to_screen("BLE initialized successfully.");
-  } else {
-    Serial.println("Failed to initialize BLE.");
-    debug_to_screen("Failed to initialize BLE.");
-  }
+  // if (wifi_init() == 0) {
+  //   Serial.println("WiFi initialized successfully.");
+  //   debug_to_screen("WiFi initialized successfully.");
+  // } else {
+  //   Serial.println("Failed to initialize WiFi.");
+  //   debug_to_screen("Failed to initialize WiFi.");
+  // }
+  // if (ble_init() == 0) {
+  //   Serial.println("BLE initialized successfully.");
+  //   debug_to_screen("BLE initialized successfully.");
+  // } else {
+  //   Serial.println("Failed to initialize BLE.");
+  //   debug_to_screen("Failed to initialize BLE.");
+  // }
 
   // Wait for a moment
   delay(1000);
@@ -129,11 +130,77 @@ void setup() {
   tft.drawCentreString("> ^ <", centerX, centerY, FONT_SIZE);
 
   tft.drawCentreString("Touch screen to test", centerX, centerY + 40, FONT_SIZE);
+  delay(2000);
+}
+
+TS_Point screenTouched() {
+  TS_Point p;
+  if (touchscreen.tirqTouched() && touchscreen.touched()) {
+    p = touchscreen.getPoint();
+    // Calibrate Touchscreen points with map function to the correct width and height
+    p.x = map(p.x, 200, 3700, 1, SCREEN_WIDTH);
+    p.y = map(p.y, 240, 3800, 1, SCREEN_HEIGHT);
+    p.z = p.z; // Pressure
+    // Print Touchscreen info on Serial Monitor
+    printTouchToSerial(p.x, p.y, p.z);
+  } else {
+    p.x = -1; // No touch
+    p.y = -1; // No touch
+    p.z = -1; // No pressure
+  }
+  delay(100); // Debounce delay
+  return p;
+}
+
+Module* selectModule(int x, int y) {
+  // Check if the touch coordinates match a module's area
+  if (y > 70 && y < 90) {
+    // WiFi Suite selected
+    Serial.println("WiFi Suite selected");
+    for (Module* module : modules) {
+      if (module->getName() == "WiFi Module") {
+        module->init();
+        module->run();
+        return module;
+      }
+    }
+  } else if (y > 100 && y < 120) {
+    // BLE Suite selected
+    Serial.println("BLE Suite selected");
+    for (Module* module : modules) {
+      if (module->getName() == "BLE Module") {
+        module->init();
+        module->run();
+        return module;
+      }
+    }
+  }
+  return nullptr; // Return nullptr if no selection was made
 }
 
 void loop() {
   // Checks if Touchscreen was touched, and prints X, Y and Pressure (Z) info on the TFT display and Serial Monitor
-  if (touchscreen.tirqTouched() && touchscreen.touched()) {
+
+  // Load PWNKEY menu
+  tft.fillScreen(TFT_WHITE);
+  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
+  tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
+  tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
+
+  TS_Point p = screenTouched();
+  if (p.x != -1 && p.y != -1) {
+    Module* module = selectModule(p.x, p.y);
+    if (module) {
+      // If a module was selected, run its cleanup method when done
+      module->init();
+      Serial.println("Running module: " + module->getName());
+      module->run();
+      module->cleanup();
+    }
+  }
+
+  // if (touchscreen.tirqTouched() && touchscreen.touched()) {
     // // Get Touchscreen points
     // TS_Point p = touchscreen.getPoint();
     // // Calibrate Touchscreen points with map function to the correct width and height
@@ -146,32 +213,46 @@ void loop() {
 
     // delay(100);
     // Load PWNKEY menu
-    tft.fillScreen(TFT_WHITE);
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
-    tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
-    tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
-    tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
+    // tft.fillScreen(TFT_WHITE);
+    // tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    // tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
+    // tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
+    // tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
     
-    // Wait for touch input to select an option
-    TS_Point p = touchscreen.getPoint();
-    x = map(p.x, 200, 3700, 1, SCREEN_WIDTH);
-    y = map(p.y, 240, 3800, 1, SCREEN_HEIGHT);
-    z = p.z;
+    // // Wait for touch input to select an option
+    // TS_Point p = touchscreen.getPoint();
+    // x = map(p.x, 200, 3700, 1, SCREEN_WIDTH);
+    // y = map(p.y, 240, 3800, 1, SCREEN_HEIGHT);
+    // z = p.z;
 
-    printTouchToSerial(x, y, z);
-    // printTouchToDisplay(x, y, z);
+    // printTouchToSerial(x, y, z);
+    // // printTouchToDisplay(x, y, z);
 
-    // Check which menu option was selected
-    if (y > 70 && y < 90) {
-      // WiFi Suite selected
-      Serial.println("WiFi Suite selected");
-      // loadWiFiMenu();
-    } else if (y > 100 && y < 120) {
-      // BLE Suite selected
-      Serial.println("BLE Suite selected");
-      // loadBLEMenu();
-    }
-  }
+    // // Check which menu option was selected
+    // if (y > 70 && y < 90) {
+    //   // WiFi Suite selected
+    //   Serial.println("WiFi Suite selected");
+    //   // loadWiFiMenu();
+    //   for (Module* module : modules) {
+    //     if (module->getName() == "WiFi Module") {
+    //       module->init();
+    //       module->run();
+    //       break;
+    //     }
+    //   }
+    // } else if (y > 100 && y < 120) {
+    //   // BLE Suite selected
+    //   Serial.println("BLE Suite selected");
+    //   // loadBLEMenu();
+    //   for (Module* module : modules) {
+    //     if (module->getName() == "BLE Module") {
+    //       module->init();
+    //       module->run();
+    //       break;
+    //     }
+    //   }
+    // }
+  // }
 }
 
 // Add at the end of your file to satisfy ESP-IDF requirements
