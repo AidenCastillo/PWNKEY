@@ -23,7 +23,8 @@
 #include <debug.h>
 #include <wifi_suite.h>
 #include <ble_suite.h>
-// #include <module.h>
+#include <module.h>
+#include <loader.h>
 
 // Global TFT display object for all files
 TFT_eSPI tft = TFT_eSPI();
@@ -79,58 +80,86 @@ void printTouchToDisplay(int touchX, int touchY, int touchZ) {
 
 void setup() {
   Serial.begin(115200);
+  delay(1000);
+  Serial.println("\n\n===== PWNKEY Starting =====");
 
-  // Start the SPI for the touchscreen and init the touchscreen
-  touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
-  touchscreen.begin(touchscreenSPI);
-  // Set the Touchscreen rotation in landscape mode
-  // Note: in some displays, the touchscreen might be upside down, so you might need to set the rotation to 3: touchscreen.setRotation(3);
-  touchscreen.setRotation(1);
-
-  // Start the tft display
+  // Initialize TFT display first
+  Serial.println("Initializing TFT display...");
   tft.init();
-  // Set the TFT display rotation in landscape mode
-  tft.setRotation(1);
-
-  // Clear the screen before writing to it
+  tft.setRotation(1); // Set landscape mode
   tft.fillScreen(TFT_WHITE);
   tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  Serial.println("TFT initialized");
+
+  // Start the dedicated SPI for the touchscreen 
+  Serial.println("Initializing touchscreen SPI...");
+  touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
   
+  pinMode(XPT2046_IRQ, INPUT_PULLUP);
+  
+  // Initialize the touchscreen
+  Serial.println("Starting touchscreen...");
+  if (touchscreen.begin(touchscreenSPI)) {
+    Serial.println("Touchscreen initialized successfully");
+  } else {
+    Serial.println("WARNING: Touchscreen initialization may have failed");
+  }
+
+  touchscreen.setRotation(1);
+  
+  Serial.println("Touchscreen configured");
+
   // Set X and Y coordinates for center of display
   int centerX = SCREEN_WIDTH / 2;
   int centerY = SCREEN_HEIGHT / 2;
-
-  // Begin PWNKEY initialization
-  debug_init();
-  // if (wifi_init() == 0) {
-  //   Serial.println("WiFi initialized successfully.");
-  //   debug_to_screen("WiFi initialized successfully.");
-  // } else {
-  //   Serial.println("Failed to initialize WiFi.");
-  //   debug_to_screen("Failed to initialize WiFi.");
-  // }
-  // if (ble_init() == 0) {
-  //   Serial.println("BLE initialized successfully.");
-  //   debug_to_screen("BLE initialized successfully.");
-  // } else {
-  //   Serial.println("Failed to initialize BLE.");
-  //   debug_to_screen("Failed to initialize BLE.");
-  // }
-
-  // Wait for a moment
-  delay(1000);
-
+  
+  // Display startup message
   tft.fillScreen(TFT_WHITE);
   tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.drawCentreString("PWNKEY Starting...", centerX, centerY - 20, FONT_SIZE);
+  tft.drawCentreString("Initializing hardware", centerX, centerY, FONT_SIZE);
 
+  // Begin PWNKEY initialization
+  Serial.println("Initializing debug system...");
+  debug_init();
+  
+  delay(500); // Give a small delay before initializing SD
+  
+  Serial.println("\n=== Starting SD Card Initialization ===");
+  tft.drawCentreString("Initializing SD card...", centerX, centerY + 20, FONT_SIZE);
+  
+  bool sd_success = fs_init();
+  if (sd_success) {
+    tft.drawCentreString("SD card ready", centerX, centerY + 40, FONT_SIZE);
+    Serial.println("SD card initialization successful");
+    
+    // Only load modules if SD card initialized successfully
+    Serial.println("Loading modules...");
+    loadModules();
+  } else {
+    tft.drawCentreString("SD card failed!", centerX, centerY + 40, FONT_SIZE);
+    Serial.println("SD card initialization failed!");
+  }
+  
+  // Allow time to see the SD card status
+  delay(1500);
+  
+  tft.fillScreen(TFT_WHITE);
+  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  
   tft.drawCentreString("PWNKEY!", centerX, 30, FONT_SIZE);
   
   tft.drawCentreString(" /\\_/\\  ", centerX, centerY - 40, FONT_SIZE);
   tft.drawCentreString("( o.o )", centerX, centerY - 20, FONT_SIZE);
   tft.drawCentreString("> ^ <", centerX, centerY, FONT_SIZE);
-
+  
   tft.drawCentreString("Touch screen to test", centerX, centerY + 40, FONT_SIZE);
   delay(2000);
+  tft.fillScreen(TFT_WHITE);
+  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
+  tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
+  tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
 }
 
 TS_Point screenTouched() {
@@ -179,26 +208,39 @@ Module* selectModule(int x, int y) {
 }
 
 void loop() {
-  // Checks if Touchscreen was touched, and prints X, Y and Pressure (Z) info on the TFT display and Serial Monitor
-
-  // Load PWNKEY menu
-  tft.fillScreen(TFT_WHITE);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
-  tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
-  tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
-  tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
-
-  TS_Point p = screenTouched();
-  if (p.x != -1 && p.y != -1) {
-    Module* module = selectModule(p.x, p.y);
-    if (module) {
-      // If a module was selected, run its cleanup method when done
-      module->init();
-      Serial.println("Running module: " + module->getName());
-      module->run();
-      module->cleanup();
+  static unsigned long lastTouchTime = 0;
+  unsigned long currentTime = millis();
+  
+  // Only process touches if enough time has passed since the last valid touch
+  if (currentTime - lastTouchTime > 500) {
+    TS_Point p = screenTouched();
+    
+    if (p.x != -1 && p.y != -1) {
+      lastTouchTime = currentTime;
+      
+      // Visual feedback for touch
+      tft.fillCircle(p.x, p.y, 5, TFT_RED);
+      delay(100);
+      Module* module = selectModule(p.x, p.y);
+      if (module) {
+        // If a module was selected, run its cleanup method when done
+        Serial.println("Running module: " + module->getName());
+        module->run();
+        module->cleanup();
+        
+        // After module execution, redraw the menu
+        tft.fillScreen(TFT_WHITE);
+        tft.setTextColor(TFT_BLACK, TFT_WHITE);
+        tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
+        tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
+        tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
+      }
     }
   }
+  
+  // Short delay to prevent CPU hogging
+  delay(10);
+}
 
   // if (touchscreen.tirqTouched() && touchscreen.touched()) {
     // // Get Touchscreen points
@@ -253,7 +295,6 @@ void loop() {
     //   }
     // }
   // }
-}
 
 // Add at the end of your file to satisfy ESP-IDF requirements
 extern "C" void app_main() {
