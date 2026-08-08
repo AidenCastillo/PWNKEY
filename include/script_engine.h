@@ -1,9 +1,7 @@
 #ifndef SCRIPT_ENGINE_H
 #define SCRIPT_ENGINE_H
 
-#include <Arduino.h>
-#include <SD.h>
-
+#include <string>
 class ScriptEngine {
 public:
     /**
@@ -47,19 +45,13 @@ public:
      * @brief Get the last error message
      * @return String containing the last error
      */
-    virtual String getLastError() = 0;
+    virtual std::string getLastError() = 0;
     
     /**
      * @brief Get the name of the script engine
      * @return String containing the engine name
      */
-    virtual String getEngineName() = 0;
+    virtual std::string getEngineName() = 0;
 };
-
-/**
- * @brief Create an instance of the configured script engine
- * @return Pointer to the created script engine
- */
-ScriptEngine* createScriptEngine();
 
 #endif // SCRIPT_ENGINE_H

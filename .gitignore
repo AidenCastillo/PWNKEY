@@ -58,6 +58,7 @@ lib/**/.build/
 
 lib/TFT_eSPI/
 lib/XPT2046_Touchscreen/
+lib/*
 
 # Ignore library caches
 .pio/libdeps/
