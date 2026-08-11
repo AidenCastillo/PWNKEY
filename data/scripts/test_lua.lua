@@ -13,3 +13,8 @@ end
 
 local sum = add(5, 7)
 print("Sum of 5 and 7 is: " .. sum)
+
+print("Lua script running!")
+
+gpio_write(5, 1)            -- turn on LED
+display_print("Hello Lua!") -- draw text

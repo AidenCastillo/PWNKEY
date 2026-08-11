@@ -24,11 +24,12 @@
 #include <wifi_suite.h>
 #include <ble_suite.h>
 #include <module.h>
+#include <fs_esp32.h>
 #include <loader.h>
 
 // Global TFT display object for all files
 TFT_eSPI tft = TFT_eSPI();
-Module *modules[] = {
+std::vector<Module*> modules = {
   new WiFiModule(),
   new BLEModule()
 };
@@ -127,7 +128,7 @@ void setup() {
   
   Serial.println("\n=== Starting SD Card Initialization ===");
   tft.drawCentreString("Initializing SD card...", centerX, centerY + 20, FONT_SIZE);
-  
+  fileSystemInterface = new ESP32FS();
   bool sd_success = fs_init();
   if (sd_success) {
     tft.drawCentreString("SD card ready", centerX, centerY + 40, FONT_SIZE);
@@ -135,7 +136,7 @@ void setup() {
     
     // Only load modules if SD card initialized successfully
     Serial.println("Loading modules...");
-    loadModules();
+    loadModules(modules);
   } else {
     tft.drawCentreString("SD card failed!", centerX, centerY + 40, FONT_SIZE);
     Serial.println("SD card initialization failed!");
@@ -158,8 +159,18 @@ void setup() {
   tft.fillScreen(TFT_WHITE);
   tft.setTextColor(TFT_BLACK, TFT_WHITE);
   tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
-  tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
-  tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
+//   tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
+//   tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
+  Serial.println("Available modules:");
+  int i = 0; // Create a clean counter to track the vertical position
+  for (Module* module : modules) {
+    Serial.printf(" - %s\n", module->getName().c_str());
+    
+    // Use the clean counter variable 'i' to space things down by 30 pixels
+    tft.drawCentreString(module->getName().c_str(), SCREEN_WIDTH / 2, 80 + (30 * i), FONT_SIZE);
+    
+    i++; // Increment the counter for the next module
+  }
 }
 
 TS_Point screenTouched() {
@@ -182,30 +193,25 @@ TS_Point screenTouched() {
 }
 
 Module* selectModule(int x, int y) {
-  // Check if the touch coordinates match a module's area
-  if (y > 70 && y < 90) {
-    // WiFi Suite selected
-    Serial.println("WiFi Suite selected");
+    // Check if the touch coordinates match a module's area
+    int moduleIndex = 0;
+    
     for (Module* module : modules) {
-      if (module->getName() == "WiFi Module") {
-        module->init();
-        module->run();
-        return module;
-      }
+        int moduleYStart = 80 + (30 * moduleIndex);
+        int moduleYEnd = moduleYStart + 25; // Bumped to 25 for a slightly larger, easier touch target
+
+        // Check if the vertical touch falls within this specific module's row bounds
+        if (y >= moduleYStart && y <= moduleYEnd) {
+            Serial.printf("%s selected\n", module->getName().c_str());
+            return module; // Return the selected module pointer to loop()
+        }
+        
+        moduleIndex++; // Advance index for the next module in the sequence
     }
-  } else if (y > 100 && y < 120) {
-    // BLE Suite selected
-    Serial.println("BLE Suite selected");
-    for (Module* module : modules) {
-      if (module->getName() == "BLE Module") {
-        module->init();
-        module->run();
-        return module;
-      }
-    }
-  }
-  return nullptr; // Return nullptr if no selection was made
+    
+    return nullptr; // Return nullptr if no selection was made
 }
+
 
 void loop() {
   static unsigned long lastTouchTime = 0;
@@ -224,7 +230,8 @@ void loop() {
       Module* module = selectModule(p.x, p.y);
       if (module) {
         // If a module was selected, run its cleanup method when done
-        Serial.println("Running module: " + module->getName());
+        Serial.printf("Running module: %s\n", module->getName().c_str());
+        module->init();
         module->run();
         module->cleanup();
         
@@ -232,8 +239,12 @@ void loop() {
         tft.fillScreen(TFT_WHITE);
         tft.setTextColor(TFT_BLACK, TFT_WHITE);
         tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
-        tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
-        tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
+
+        int i = 0;
+        for (Module* mod : modules) {
+          tft.drawCentreString(mod->getName().c_str(), SCREEN_WIDTH / 2, 80 + (30 * i), FONT_SIZE);
+          i++;
+        }
       }
     }
   }

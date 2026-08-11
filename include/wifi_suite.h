@@ -1,13 +1,17 @@
 #ifndef WIFI_SUITE_H
 #define WIFI_SUITE_H
-#include <Arduino.h>
+#ifdef ESP32
+    #include <Arduino.h>
+#else
+    #include <iostream> // Needed for std::cout on desktop/native
+#endif
 #include <WiFi.h>
 #include <module.h>
 #include <main.h>
 
 class WiFiModule : public Module {
   public:
-    String getName() const override {
+    std::string getName() const override {
         return "WiFi Module";
     }
 
@@ -19,8 +23,8 @@ class WiFiModule : public Module {
         }
     }
 
-    String getInfo() const override {
-        return "WiFi Status: " + String(WiFi.status());
+    std::string getInfo() const override {
+        return "WiFi Status: " + std::to_string(WiFi.status());
     }
 
     void run() override {

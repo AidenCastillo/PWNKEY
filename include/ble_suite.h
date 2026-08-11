@@ -1,47 +1,52 @@
 #ifndef BLE_SUITE_H
 #define BLE_SUITE_H
 
-#include <Arduino.h>
-#include <BLEDevice.h>
-#include <module.h>
-#include <Arduino.h>
-#include <main.h>
-
-class BLEModule : public Module {
-  public:
-    String getName() const override {
-      return "BLE Module";
+#ifdef ESP32
+    #include <Arduino.h>
+    #include <BLEDevice.h>
+    #include <module.h>
+    #include <Arduino.h>
+    #include <main.h>
+    
+    class BLEModule : public Module {
+        public:
+    std::string getName() const override {
+        return "BLE Module";
     }
-
+    
     void init() override {
     //   BLEDevice::init("PWNKEY");
-      Serial.println("BLE initialized.");
+    Serial.println("BLE initialized.");
     }
-
-    String getInfo() const override {
+    
+    std::string getInfo() const override {
       return "BLE Status: ";
     }
-
+    
     void run() override {
-      // BLE operations can be added here
-      Serial.println("Running BLE operations...");
-
-      while (true) {
-        // Show BLE Screen
-        tft.fillScreen(TFT_WHITE);
-        tft.setTextColor(TFT_BLACK, TFT_WHITE);
-        tft.drawCentreString("BLE Connected", SCREEN_WIDTH / 2, 30, FONT_SIZE);
-        tft.drawCentreString("Scanning for devices...", SCREEN_WIDTH / 2, 80
-                                , FONT_SIZE);
-        delay(2000); // Simulate scanning delay
-
-      }
-    }
-
-    void cleanup() override {
+        // BLE operations can be added here
+        Serial.println("Running BLE operations...");
+        
+        while (true) {
+            // Show BLE Screen
+            tft.fillScreen(TFT_WHITE);
+            tft.setTextColor(TFT_BLACK, TFT_WHITE);
+            tft.drawCentreString("BLE Connected", SCREEN_WIDTH / 2, 30, FONT_SIZE);
+            tft.drawCentreString("Scanning for devices...", SCREEN_WIDTH / 2, 80
+                , FONT_SIZE);
+                delay(2000); // Simulate scanning delay
+                
+            }
+        }
+        
+        void cleanup() override {
     //   BLEDevice::deinit();
-      Serial.println("BLE deinitialized.");
+    Serial.println("BLE deinitialized.");
     }
 };
 
+#endif
+
+#else
+    #include <iostream> // Needed for std::cout on desktop/native
 #endif

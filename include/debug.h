@@ -1,7 +1,11 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
-#include <Arduino.h>
+#ifdef ESP32
+    #include <Arduino.h>
+#else
+    #include <iostream> // Needed for std::cout on desktop/native
+#endif
 
 extern char debugLines[25][50];  // Array to hold 25 debug lines, each up to 50 characters
 

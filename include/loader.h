@@ -154,19 +154,52 @@
 #include "lua_engine.h"
 #include <string>
 
-FSInterface* fs;  // global pointer
+FSInterface* fileSystemInterface;  // global pointer
+
 
 bool fs_init() {
-    return fs->init();
+    return fileSystemInterface->init();
 }
 
 #ifdef ESP32
-void loadModules() {
-    auto files = fs->listFiles("scripts");
+void loadModules(std::vector<Module*>& modules) {
+    auto files = fileSystemInterface->listFiles("/scripts");
     for (auto& f : files) {
         Serial.printf("Found file: %s\n", f.name.c_str());
         Serial.printf("Content: %s\n", f.content.c_str());
     }
+    static LuaEngine lua;
+
+    // Add every lua file in the /scripts directory to the modules array
+    for (auto& f : files) {
+        // Convert filename to lowercase for comparison
+        std::string lowerName = f.name;
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), [](unsigned char c) {
+            return std::tolower(c);
+        });
+
+        if (lowerName.length() >= 4 && lowerName.rfind(".lua") == (lowerName.length() - 4)) {
+            Serial.printf("Loading module: %s\n", f.name.c_str());
+            
+            // This safely allocates the module on the heap
+            LuaModule* module = lua.createModule(f.name, f.content);
+            
+            // Safely push to a vector without worrying about fixed array bounds
+            modules.push_back(module); 
+        }
+    }
+
+    // for (auto& f : files) {
+    //     // TEST_LUA.LUA
+    //     std::transform(f.name.begin(), f.name.end(), f.name.begin(), [](unsigned char c) {
+    //         return std::tolower(c);
+    //     });
+    //     if (f.name.rfind(".lua") == (f.name.length() - 4)) {
+    //         Serial.printf("Executing module: %s\n", f.name.c_str());
+    //         LuaEngine lua;
+    //         lua.runScript(f.content);
+    //     }
+    // }
 }
 #endif
 
@@ -174,7 +207,7 @@ void loadModules() {
 void loadModules() {
     LuaEngine lua;
 
-    auto files = fs->listFiles("scripts");
+    auto files = fileSystemInterface->listFiles("scripts");
     for (auto& f : files) {
         if (f.name.rfind(".lua") == (f.name.length() - 4)) {
             std::cout << "Executing module: " << f.name << std::endl;
