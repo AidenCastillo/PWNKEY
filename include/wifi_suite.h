@@ -1,10 +1,8 @@
 #ifndef WIFI_SUITE_H
 #define WIFI_SUITE_H
 #ifdef ESP32
-    #include <Arduino.h>
-#else
-    #include <iostream> // Needed for std::cout on desktop/native
-#endif
+#include <Arduino.h>
+
 #include <WiFi.h>
 #include <module.h>
 #include <main.h>
@@ -56,4 +54,5 @@ class WiFiModule : public Module {
     }
 };
 
+#endif
 #endif

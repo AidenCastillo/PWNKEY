@@ -1,4 +1,4 @@
-#include "engine/LuaWiFi.h"
+#include "engine/LuaWifi.h"
 #ifdef ESP32
 #include <Arduino.h>
 #include <WiFi.h>
@@ -26,7 +26,7 @@ static int scan(lua_State* L) {
     return 1;
 }
 
-void LuaWiFi::registerModule(lua_State* L) {
+void LuaWifi::registerModule(lua_State* L) {
     lua_newtable(L);
 
     lua_pushcfunction(L, connect);
@@ -44,45 +44,83 @@ void LuaWiFi::registerModule(lua_State* L) {
 #endif
 
 #ifdef NATIVE
-#include <iostream>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>
 
+#include <iostream>
+
+#if defined(_WIN32)
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+#endif
 // Although wifi, native will utilize sockets, and other networking libraries
 
 static int createSocketServer(lua_State* L) {
     int port = luaL_checkinteger(L, 1);
     std::cout << "[NATIVE] Creating socket server on port: " << port << std::endl;
 
-    // 1. Create socket
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+#if defined(_WIN32)
+    // Initialize Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+        lua_pushnil(L);
+        lua_pushstring(L, "WSAStartup failed");
+        return 2;
+    }
+#endif
+
+    // Create socket
+    int server_fd =
+#if defined(_WIN32)
+        socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+#else
+        socket(AF_INET, SOCK_STREAM, 0);
+#endif
+
     if (server_fd < 0) {
         lua_pushnil(L);
         lua_pushstring(L, "socket creation failed");
         return 2;
     }
 
-    // Allow reuse of the port
+    // Allow port reuse
     int opt = 1;
+#if defined(_WIN32)
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
+#else
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#endif
 
-    // 2. Bind
+    // Bind
     sockaddr_in address{};
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
 
     if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
+#if defined(_WIN32)
+        closesocket(server_fd);
+        WSACleanup();
+#else
         close(server_fd);
+#endif
         lua_pushnil(L);
         lua_pushstring(L, "bind failed");
         return 2;
     }
 
-    // 3. Listen
+    // Listen
     if (listen(server_fd, 3) < 0) {
+#if defined(_WIN32)
+        closesocket(server_fd);
+        WSACleanup();
+#else
         close(server_fd);
+#endif
         lua_pushnil(L);
         lua_pushstring(L, "listen failed");
         return 2;
@@ -90,36 +128,48 @@ static int createSocketServer(lua_State* L) {
 
     std::cout << "[NATIVE] Server listening on port " << port << "..." << std::endl;
 
-    // 4. Accept (blocking)
+    // Accept
     socklen_t addr_len = sizeof(address);
     int client_socket = accept(server_fd, (struct sockaddr*)&address, &addr_len);
     if (client_socket < 0) {
+#if defined(_WIN32)
+        closesocket(server_fd);
+        WSACleanup();
+#else
         close(server_fd);
+#endif
         lua_pushnil(L);
         lua_pushstring(L, "accept failed");
         return 2;
     }
 
-    // 5. Read data
+    // Read
     char buffer[1024] = {0};
+#if defined(_WIN32)
+    int bytes = recv(client_socket, buffer, sizeof(buffer), 0);
+#else
     int bytes = read(client_socket, buffer, sizeof(buffer));
+#endif
 
-    std::string received = (bytes > 0) ? std::string(buffer, bytes)
-                                       : std::string("");
+    std::string received = (bytes > 0) ? std::string(buffer, bytes) : "";
 
     std::cout << "[NATIVE] Client says: " << received << std::endl;
 
-    // 6. Cleanup
+    // Cleanup
+#if defined(_WIN32)
+    closesocket(client_socket);
+    closesocket(server_fd);
+    WSACleanup();
+#else
     close(client_socket);
     close(server_fd);
+#endif
 
-    // Return the received data to Lua
     lua_pushstring(L, received.c_str());
     return 1;
 }
 
-
-void LuaWiFi::registerModule(lua_State* L) {
+void LuaWifi::registerModule(lua_State* L) {
     lua_newtable(L);
 
     lua_pushcfunction(L, [](lua_State* L) -> int {

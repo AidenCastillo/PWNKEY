@@ -1,4 +1,5 @@
 #include "engine/LuaScreen.h"
+#ifdef ESP32
 #include "main.h"
 
 static int fill(lua_State* L) {
@@ -36,3 +37,4 @@ void LuaScreen::registerModule(lua_State* L) {
 
     lua_setglobal(L, "screen");
 }
+#endif

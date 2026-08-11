@@ -6,7 +6,7 @@
 
 TEST_CASE("LuaEngine runScript") {
     NativeFS native;
-    fs = &native;
+    fileSystemInterface = &native;
 
     LuaEngine lua;
     CHECK(lua.runScript("x = 42") == true);
@@ -16,7 +16,7 @@ TEST_CASE("LuaEngine runScript") {
 
 TEST_CASE("LuaEngine runFile") {
     NativeFS native;
-    fs = &native;
+    fileSystemInterface = &native;
 
     native.mkdir("build");
     native.mkdir("build/native_tests");
@@ -40,13 +40,27 @@ TEST_CASE("LuaEngine runFile") {
 TEST_CASE("Run prewritten Lua script from data/scripts/test_lua.lua") {
     // Use native filesystem
     NativeFS native;
-    fs = &native;
+    fileSystemInterface = &native;
 
     CHECK(fs_init() == true);
 
     // Run the Lua script
     LuaEngine lua;
     bool ok = lua.runFile("data/scripts/test_lua.lua");
+
+    CHECK(ok == true);
+}
+
+TEST_CASE("Run Lua Wifi script from data/scripts/test_wifi.lua") {
+    // Use native filesystem
+    NativeFS native;
+    fileSystemInterface = &native;
+
+    CHECK(fs_init() == true);
+
+    // Run the Lua script
+    LuaEngine lua;
+    bool ok = lua.runFile("data/scripts/test_wifi.lua");
 
     CHECK(ok == true);
 }

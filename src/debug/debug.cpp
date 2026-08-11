@@ -1,9 +1,6 @@
 #include <debug.h>
-#include <Arduino.h>
-#include <TFT_eSPI.h>
-#include <XPT2046_Touchscreen.h>
-#include <main.h>
 
+#ifdef ESP32
 char debugLines[25][50];  // Array to hold 25 debug lines, each up to 50 characters
 
 void debug_init() {
@@ -39,4 +36,4 @@ void debug_to_screen(const char *message) {
     // Also print to Serial Monitor
     Serial.println(message);
 }
-
+#endif

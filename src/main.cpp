@@ -7,7 +7,7 @@
     Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files.
     The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
-
+#ifdef ESP32
 #include <SPI.h>
 
 /*  Install the "TFT_eSPI" library by Bodmer to interface with the TFT Display - https://github.com/Bodmer/TFT_eSPI
@@ -316,3 +316,5 @@ extern "C" void app_main() {
     yield();
   }
 }
+
+#endif

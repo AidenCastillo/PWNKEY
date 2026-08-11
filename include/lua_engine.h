@@ -3,6 +3,7 @@
 
 #include "fs_interface.h"
 #include "engine_bindings.h"
+#include "engine/LuaWifi.h"
 #include "module.h"
 
 #include <lua.hpp>
@@ -20,6 +21,7 @@ public:
 
         // Register your custom functions
         register_engine_bindings(L);
+        LuaWifi::registerModule(L);
     }
 
     ~LuaEngine() {

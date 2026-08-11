@@ -1,5 +1,4 @@
 #include <ble_suite.h>
-#include <Arduino.h>
 
 
 // int ble_init() {

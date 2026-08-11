@@ -3,6 +3,9 @@
 
 #ifdef ESP32
     #include <Arduino.h>
+    #include <TFT_eSPI.h>
+    #include <XPT2046_Touchscreen.h>
+    #include <main.h>
 #else
     #include <iostream> // Needed for std::cout on desktop/native
 #endif
