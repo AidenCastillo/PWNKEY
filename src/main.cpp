@@ -47,265 +47,183 @@ XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
 // Touchscreen coordinates: (x, y) and pressure (z)
 int x, y, z;
 
-// Print Touchscreen info about X, Y and Pressure (Z) on the Serial Monitor
-void printTouchToSerial(int touchX, int touchY, int touchZ) {
-  Serial.print("X = ");
-  Serial.print(touchX);
-  Serial.print(" | Y = ");
-  Serial.print(touchY);
-  Serial.print(" | Pressure = ");
-  Serial.print(touchZ);
-  Serial.println();
+// How many modules to show per page
+static const int MODULES_PER_PAGE = 5;
+
+// Track which page we're on
+static int currentPage = 0;
+
+// Button geometry
+static const int BTN_WIDTH  = 100;
+static const int BTN_HEIGHT = 40;
+static const int BTN_Y      = SCREEN_HEIGHT - 60;
+
+// Forward declaration
+void drawModuleScreen(const std::vector<Module*>& modules);
+
+TS_Point getTouch() {
+    TS_Point p;
+
+    if (touchscreen.tirqTouched() && touchscreen.touched()) {
+        p = touchscreen.getPoint();
+        p.x = map(p.x, 200, 3700, 1, SCREEN_WIDTH);
+        p.y = map(p.y, 240, 3800, 1, SCREEN_HEIGHT);
+        return p;
+    }
+
+    return TS_Point(-1, -1, -1);
 }
 
-// Print Touchscreen info about X, Y and Pressure (Z) on the TFT Display
-void printTouchToDisplay(int touchX, int touchY, int touchZ) {
-  // Clear TFT screen
-  tft.fillScreen(TFT_WHITE);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+void drawButton(const char* label, int x, int y) {
+    tft.fillRoundRect(x, y, BTN_WIDTH, BTN_HEIGHT, 6, TFT_DARKGREY);
+    tft.drawRoundRect(x, y, BTN_WIDTH, BTN_HEIGHT, 6, TFT_WHITE);
+    tft.drawCentreString(label, x + BTN_WIDTH / 2, y + 10, FONT_SIZE);
+}
 
-  int centerX = SCREEN_WIDTH / 2;
-  int textY = 80;
- 
-  String tempText = "X = " + String(touchX);
-  tft.drawCentreString(tempText, centerX, textY, FONT_SIZE);
+void drawModuleScreen(const std::vector<Module*>& modules) {
+    tft.fillScreen(TFT_BLACK);
+    tft.drawCentreString("Available Modules", SCREEN_WIDTH / 2, 20, FONT_SIZE + 2);
 
-  textY += 20;
-  tempText = "Y = " + String(touchY);
-  tft.drawCentreString(tempText, centerX, textY, FONT_SIZE);
+    int totalPages = (modules.size() + MODULES_PER_PAGE - 1) / MODULES_PER_PAGE;
+    int startIndex = currentPage * MODULES_PER_PAGE;
+    int endIndex   = std::min(startIndex + MODULES_PER_PAGE, (int)modules.size());
 
-  textY += 20;
-  tempText = "Pressure = " + String(touchZ);
-  tft.drawCentreString(tempText, centerX, textY, FONT_SIZE);
+    int yBase = 80;
+
+    for (int i = startIndex; i < endIndex; i++) {
+        int slot = i - startIndex;
+        tft.drawCentreString(modules[i]->getName().c_str(),
+                             SCREEN_WIDTH / 2,
+                             yBase + (slot * 30),
+                             FONT_SIZE);
+    }
+
+    if (currentPage > 0)
+        drawButton("Prev", 10, BTN_Y);
+
+    if (currentPage < totalPages - 1)
+        drawButton("Next", SCREEN_WIDTH - BTN_WIDTH - 10, BTN_Y);
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Page %d / %d", currentPage + 1, totalPages);
+    tft.drawCentreString(buf, SCREEN_WIDTH / 2, SCREEN_HEIGHT - 20, FONT_SIZE);
+}
+
+void handleModuleScreenTouch(int x, int y, const std::vector<Module*>& modules) {
+    int totalPages = (modules.size() + MODULES_PER_PAGE - 1) / MODULES_PER_PAGE;
+
+    // NEXT
+    if (x >= SCREEN_WIDTH - BTN_WIDTH - 10 &&
+        x <= SCREEN_WIDTH - 10 &&
+        y >= BTN_Y &&
+        y <= BTN_Y + BTN_HEIGHT)
+    {
+        if (currentPage < totalPages - 1) {
+            currentPage++;
+            drawModuleScreen(modules);
+        }
+        return;
+    }
+
+    // PREV
+    if (x >= 10 &&
+        x <= 10 + BTN_WIDTH &&
+        y >= BTN_Y &&
+        y <= BTN_Y + BTN_HEIGHT)
+    {
+        if (currentPage > 0) {
+            currentPage--;
+            drawModuleScreen(modules);
+        }
+        return;
+    }
+}
+
+Module* detectModuleTap(int x, int y) {
+    int startIndex = currentPage * MODULES_PER_PAGE;
+    int endIndex   = std::min(startIndex + MODULES_PER_PAGE, (int)modules.size());
+
+    for (int i = startIndex; i < endIndex; i++) {
+        int slot = i - startIndex;
+        int yStart = 80 + (slot * 30);
+        int yEnd   = yStart + 25;
+
+        if (y >= yStart && y <= yEnd)
+            return modules[i];
+    }
+
+    return nullptr;
+}
+
+void initDisplay() {
+    tft.init();
+    tft.setRotation(1);
+    tft.fillScreen(TFT_WHITE);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+}
+
+void initTouchscreen() {
+    touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+    pinMode(XPT2046_IRQ, INPUT_PULLUP);
+    touchscreen.begin(touchscreenSPI);
+    touchscreen.setRotation(1);
+}
+
+void initSD() {
+    fileSystemInterface = new ESP32FS();
+    if (fs_init()) {
+        loadModules(modules);
+    }
 }
 
 void setup() {
-  Serial.begin(115200);
-  delay(1000);
-  Serial.println("\n\n===== PWNKEY Starting =====");
+    Serial.begin(115200);
+    delay(500);
 
-  // Initialize TFT display first
-  Serial.println("Initializing TFT display...");
-  tft.init();
-  tft.setRotation(1); // Set landscape mode
-  tft.fillScreen(TFT_WHITE);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
-  Serial.println("TFT initialized");
+    initDisplay();
+    initTouchscreen();
+    debug_init();
+    initSD();
 
-  // Start the dedicated SPI for the touchscreen 
-  Serial.println("Initializing touchscreen SPI...");
-  touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
-  
-  pinMode(XPT2046_IRQ, INPUT_PULLUP);
-  
-  // Initialize the touchscreen
-  Serial.println("Starting touchscreen...");
-  if (touchscreen.begin(touchscreenSPI)) {
-    Serial.println("Touchscreen initialized successfully");
-  } else {
-    Serial.println("WARNING: Touchscreen initialization may have failed");
-  }
-
-  touchscreen.setRotation(1);
-  
-  Serial.println("Touchscreen configured");
-
-  // Set X and Y coordinates for center of display
-  int centerX = SCREEN_WIDTH / 2;
-  int centerY = SCREEN_HEIGHT / 2;
-  
-  // Display startup message
-  tft.fillScreen(TFT_WHITE);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
-  tft.drawCentreString("PWNKEY Starting...", centerX, centerY - 20, FONT_SIZE);
-  tft.drawCentreString("Initializing hardware", centerX, centerY, FONT_SIZE);
-
-  // Begin PWNKEY initialization
-  Serial.println("Initializing debug system...");
-  debug_init();
-  
-  delay(500); // Give a small delay before initializing SD
-  
-  Serial.println("\n=== Starting SD Card Initialization ===");
-  tft.drawCentreString("Initializing SD card...", centerX, centerY + 20, FONT_SIZE);
-  fileSystemInterface = new ESP32FS();
-  bool sd_success = fs_init();
-  if (sd_success) {
-    tft.drawCentreString("SD card ready", centerX, centerY + 40, FONT_SIZE);
-    Serial.println("SD card initialization successful");
+    tft.fillScreen(TFT_WHITE);
+    tft.setTextColor(TFT_BLACK, TFT_WHITE);
     
-    // Only load modules if SD card initialized successfully
-    Serial.println("Loading modules...");
-    loadModules(modules);
-  } else {
-    tft.drawCentreString("SD card failed!", centerX, centerY + 40, FONT_SIZE);
-    Serial.println("SD card initialization failed!");
-  }
-  
-  // Allow time to see the SD card status
-  delay(1500);
-  
-  tft.fillScreen(TFT_WHITE);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
-  
-  tft.drawCentreString("PWNKEY!", centerX, 30, FONT_SIZE);
-  
-  tft.drawCentreString(" /\\_/\\  ", centerX, centerY - 40, FONT_SIZE);
-  tft.drawCentreString("( o.o )", centerX, centerY - 20, FONT_SIZE);
-  tft.drawCentreString("> ^ <", centerX, centerY, FONT_SIZE);
-  
-  tft.drawCentreString("Touch screen to test", centerX, centerY + 40, FONT_SIZE);
-  delay(2000);
-  tft.fillScreen(TFT_WHITE);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
-  tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
-//   tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
-//   tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
-  Serial.println("Available modules:");
-  int i = 0; // Create a clean counter to track the vertical position
-  for (Module* module : modules) {
-    Serial.printf(" - %s\n", module->getName().c_str());
+    tft.drawCentreString("PWNKEY!", SCREEN_WIDTH / 2, 30, FONT_SIZE);
     
-    // Use the clean counter variable 'i' to space things down by 30 pixels
-    tft.drawCentreString(module->getName().c_str(), SCREEN_WIDTH / 2, 80 + (30 * i), FONT_SIZE);
+    tft.drawCentreString(" /\\_/\\  ", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 40, FONT_SIZE);
+    tft.drawCentreString("( o.o )", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20, FONT_SIZE);
+    tft.drawCentreString("> ^ <", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, FONT_SIZE);
     
-    i++; // Increment the counter for the next module
-  }
+    tft.drawCentreString("Touch screen to test", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 40, FONT_SIZE);
+    delay(2000);
+
+    drawModuleScreen(modules);
 }
-
-TS_Point screenTouched() {
-  TS_Point p;
-  if (touchscreen.tirqTouched() && touchscreen.touched()) {
-    p = touchscreen.getPoint();
-    // Calibrate Touchscreen points with map function to the correct width and height
-    p.x = map(p.x, 200, 3700, 1, SCREEN_WIDTH);
-    p.y = map(p.y, 240, 3800, 1, SCREEN_HEIGHT);
-    p.z = p.z; // Pressure
-    // Print Touchscreen info on Serial Monitor
-    printTouchToSerial(p.x, p.y, p.z);
-  } else {
-    p.x = -1; // No touch
-    p.y = -1; // No touch
-    p.z = -1; // No pressure
-  }
-  delay(100); // Debounce delay
-  return p;
-}
-
-Module* selectModule(int x, int y) {
-    // Check if the touch coordinates match a module's area
-    int moduleIndex = 0;
-    
-    for (Module* module : modules) {
-        int moduleYStart = 80 + (30 * moduleIndex);
-        int moduleYEnd = moduleYStart + 25; // Bumped to 25 for a slightly larger, easier touch target
-
-        // Check if the vertical touch falls within this specific module's row bounds
-        if (y >= moduleYStart && y <= moduleYEnd) {
-            Serial.printf("%s selected\n", module->getName().c_str());
-            return module; // Return the selected module pointer to loop()
-        }
-        
-        moduleIndex++; // Advance index for the next module in the sequence
-    }
-    
-    return nullptr; // Return nullptr if no selection was made
-}
-
 
 void loop() {
-  static unsigned long lastTouchTime = 0;
-  unsigned long currentTime = millis();
-  
-  // Only process touches if enough time has passed since the last valid touch
-  if (currentTime - lastTouchTime > 500) {
-    TS_Point p = screenTouched();
-    
-    if (p.x != -1 && p.y != -1) {
-      lastTouchTime = currentTime;
-      
-      // Visual feedback for touch
-      tft.fillCircle(p.x, p.y, 5, TFT_RED);
-      delay(100);
-      Module* module = selectModule(p.x, p.y);
-      if (module) {
-        // If a module was selected, run its cleanup method when done
-        Serial.printf("Running module: %s\n", module->getName().c_str());
-        module->init();
-        module->run();
-        module->cleanup();
-        
-        // After module execution, redraw the menu
-        tft.fillScreen(TFT_WHITE);
-        tft.setTextColor(TFT_BLACK, TFT_WHITE);
-        tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
+    static unsigned long lastTouch = 0;
+    unsigned long now = millis();
 
-        int i = 0;
-        for (Module* mod : modules) {
-          tft.drawCentreString(mod->getName().c_str(), SCREEN_WIDTH / 2, 80 + (30 * i), FONT_SIZE);
-          i++;
+    if (now - lastTouch > 150) {
+        TS_Point p = getTouch();
+
+        if (p.x != -1) {
+            lastTouch = now;
+
+            handleModuleScreenTouch(p.x, p.y, modules);
+
+            Module* selected = detectModuleTap(p.x, p.y);
+            if (selected) {
+                selected->init();
+                selected->run();
+                selected->cleanup();
+                drawModuleScreen(modules);
+            }
         }
-      }
     }
-  }
-  
-  // Short delay to prevent CPU hogging
-  delay(10);
+
+    delay(10);
 }
-
-  // if (touchscreen.tirqTouched() && touchscreen.touched()) {
-    // // Get Touchscreen points
-    // TS_Point p = touchscreen.getPoint();
-    // // Calibrate Touchscreen points with map function to the correct width and height
-    // x = map(p.x, 200, 3700, 1, SCREEN_WIDTH);
-    // y = map(p.y, 240, 3800, 1, SCREEN_HEIGHT);
-    // z = p.z;
-
-    // printTouchToSerial(x, y, z);
-    // printTouchToDisplay(x, y, z);
-
-    // delay(100);
-    // Load PWNKEY menu
-    // tft.fillScreen(TFT_WHITE);
-    // tft.setTextColor(TFT_BLACK, TFT_WHITE);
-    // tft.drawCentreString("PWNKEY Menu", SCREEN_WIDTH / 2, 30, FONT_SIZE);
-    // tft.drawCentreString("1. WiFi Suite", SCREEN_WIDTH / 2, 80, FONT_SIZE);
-    // tft.drawCentreString("2. BLE Suite", SCREEN_WIDTH / 2, 110, FONT_SIZE);
-    
-    // // Wait for touch input to select an option
-    // TS_Point p = touchscreen.getPoint();
-    // x = map(p.x, 200, 3700, 1, SCREEN_WIDTH);
-    // y = map(p.y, 240, 3800, 1, SCREEN_HEIGHT);
-    // z = p.z;
-
-    // printTouchToSerial(x, y, z);
-    // // printTouchToDisplay(x, y, z);
-
-    // // Check which menu option was selected
-    // if (y > 70 && y < 90) {
-    //   // WiFi Suite selected
-    //   Serial.println("WiFi Suite selected");
-    //   // loadWiFiMenu();
-    //   for (Module* module : modules) {
-    //     if (module->getName() == "WiFi Module") {
-    //       module->init();
-    //       module->run();
-    //       break;
-    //     }
-    //   }
-    // } else if (y > 100 && y < 120) {
-    //   // BLE Suite selected
-    //   Serial.println("BLE Suite selected");
-    //   // loadBLEMenu();
-    //   for (Module* module : modules) {
-    //     if (module->getName() == "BLE Module") {
-    //       module->init();
-    //       module->run();
-    //       break;
-    //     }
-    //   }
-    // }
-  // }
 
 // Add at the end of your file to satisfy ESP-IDF requirements
 extern "C" void app_main() {

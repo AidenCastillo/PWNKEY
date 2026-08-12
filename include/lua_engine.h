@@ -4,6 +4,12 @@
 #include "fs_interface.h"
 #include "engine_bindings.h"
 #include "engine/LuaWifi.h"
+#include "engine/LuaBluetooth.h"
+#include "engine/LuaRadio.h"
+#include "engine/LuaScreen.h"
+#include "engine/LuaGPIO.h"
+#include "engine/LuaSystem.h"
+#include "engine/LuaFS.h"
 #include "module.h"
 
 #include <lua.hpp>
@@ -22,6 +28,12 @@ public:
         // Register your custom functions
         register_engine_bindings(L);
         LuaWifi::registerModule(L);
+        // LuaBluetooth::registerModule(L);
+        // LuaRadio::registerModule(L);
+        LuaScreen::registerModule(L);
+        // LuaGPIO::registerModule(L);
+        // LuaSystem::registerModule(L);
+        // LuaFS::registerModule(L);
     }
 
     ~LuaEngine() {
