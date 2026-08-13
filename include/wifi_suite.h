@@ -34,17 +34,17 @@ class WiFiModule : public Module {
         }
         // Loop until user wants to exit
 
-        while (true) {
-            Serial.print("IP Address: ");
-            Serial.println(WiFi.localIP());
+        // while (true) {
+        //     Serial.print("IP Address: ");
+        //     Serial.println(WiFi.localIP());
     
-            // update screen with WiFi info
-            tft.fillScreen(TFT_WHITE);
-            tft.setTextColor(TFT_BLACK, TFT_WHITE);
-            tft.drawCentreString("WiFi Connected", SCREEN_WIDTH / 2, 30, FONT_SIZE);
-            tft.drawCentreString("IP: " + WiFi.localIP().toString(),
-                                    SCREEN_WIDTH / 2, 80, FONT_SIZE);
-        }
+        //     // update screen with WiFi info
+        //     tft.fillScreen(TFT_WHITE);
+        //     tft.setTextColor(TFT_BLACK, TFT_WHITE);
+        //     tft.drawCentreString("WiFi Connected", SCREEN_WIDTH / 2, 30, FONT_SIZE);
+        //     tft.drawCentreString("IP: " + WiFi.localIP().toString(),
+        //                             SCREEN_WIDTH / 2, 80, FONT_SIZE);
+        // }
 
         
     }

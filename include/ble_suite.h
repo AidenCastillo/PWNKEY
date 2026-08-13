@@ -27,16 +27,16 @@
         // BLE operations can be added here
         Serial.println("Running BLE operations...");
         
-        while (true) {
-            // Show BLE Screen
-            tft.fillScreen(TFT_WHITE);
-            tft.setTextColor(TFT_BLACK, TFT_WHITE);
-            tft.drawCentreString("BLE Connected", SCREEN_WIDTH / 2, 30, FONT_SIZE);
-            tft.drawCentreString("Scanning for devices...", SCREEN_WIDTH / 2, 80
-                , FONT_SIZE);
-                delay(2000); // Simulate scanning delay
+        // while (true) {
+        //     // Show BLE Screen
+        //     tft.fillScreen(TFT_WHITE);
+        //     tft.setTextColor(TFT_BLACK, TFT_WHITE);
+        //     tft.drawCentreString("BLE Connected", SCREEN_WIDTH / 2, 30, FONT_SIZE);
+        //     tft.drawCentreString("Scanning for devices...", SCREEN_WIDTH / 2, 80
+        //         , FONT_SIZE);
+        //         delay(2000); // Simulate scanning delay
                 
-            }
+        //     }
         }
         
         void cleanup() override {

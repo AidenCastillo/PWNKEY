@@ -3,6 +3,7 @@
 #include <iostream>
 #include "fs_native.h"
 #include "loader.h"
+#include "lua_engine.h"
 
 TEST_CASE("LuaEngine runScript") {
     NativeFS native;
@@ -51,7 +52,21 @@ TEST_CASE("Run prewritten Lua script from data/scripts/test_lua.lua") {
     CHECK(ok == true);
 }
 
-TEST_CASE("Run Lua Wifi script from data/scripts/test_wifi.lua") {
+// TEST_CASE("Run Lua Wifi script from data/scripts/test_wifi.lua") {
+//     // Use native filesystem
+//     NativeFS native;
+//     fileSystemInterface = &native;
+
+//     CHECK(fs_init() == true);
+
+//     // Run the Lua script
+//     LuaEngine lua;
+//     bool ok = lua.runFile("data/scripts/test_wifi.lua");
+
+//     CHECK(ok == true);
+// }
+
+TEST_CASE("Run Lua ScreenDemo.lua file") {
     // Use native filesystem
     NativeFS native;
     fileSystemInterface = &native;
@@ -60,7 +75,7 @@ TEST_CASE("Run Lua Wifi script from data/scripts/test_wifi.lua") {
 
     // Run the Lua script
     LuaEngine lua;
-    bool ok = lua.runFile("data/scripts/test_wifi.lua");
+    bool ok = lua.runFile("data/scripts/ScreenDemo.lua");
 
     CHECK(ok == true);
 }

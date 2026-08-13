@@ -26,12 +26,13 @@
 #include <module.h>
 #include <fs_esp32.h>
 #include <loader.h>
+#include "esp_heap_caps.h"
+TFT_eSPI tft = TFT_eSPI();            // Physical screen
+TFT_eSprite spr = TFT_eSprite(&tft);  // Off-screen buffer
 
-// Global TFT display object for all files
-TFT_eSPI tft = TFT_eSPI();
 std::vector<Module*> modules = {
-  new WiFiModule(),
-  new BLEModule()
+    new WiFiModule(),
+    new BLEModule()
 };
 
 // Touchscreen pins
@@ -49,8 +50,6 @@ int x, y, z;
 
 // How many modules to show per page
 static const int MODULES_PER_PAGE = 5;
-
-// Track which page we're on
 static int currentPage = 0;
 
 // Button geometry
@@ -74,15 +73,16 @@ TS_Point getTouch() {
     return TS_Point(-1, -1, -1);
 }
 
-void drawButton(const char* label, int x, int y) {
-    tft.fillRoundRect(x, y, BTN_WIDTH, BTN_HEIGHT, 6, TFT_DARKGREY);
-    tft.drawRoundRect(x, y, BTN_WIDTH, BTN_HEIGHT, 6, TFT_WHITE);
-    tft.drawCentreString(label, x + BTN_WIDTH / 2, y + 10, FONT_SIZE);
+void drawButtonSprite(const char* label, int x, int y) {
+    spr.fillRoundRect(x, y, BTN_WIDTH, BTN_HEIGHT, 6, TFT_DARKGREY);
+    spr.drawRoundRect(x, y, BTN_WIDTH, BTN_HEIGHT, 6, TFT_WHITE);
+    spr.drawCentreString(label, x + BTN_WIDTH / 2, y + 10, FONT_SIZE);
 }
 
 void drawModuleScreen(const std::vector<Module*>& modules) {
-    tft.fillScreen(TFT_BLACK);
-    tft.drawCentreString("Available Modules", SCREEN_WIDTH / 2, 20, FONT_SIZE + 2);
+    spr.fillSprite(TFT_WHITE);
+
+    spr.drawCentreString("Available Modules", SCREEN_WIDTH / 2, 20, FONT_SIZE + 2);
 
     int totalPages = (modules.size() + MODULES_PER_PAGE - 1) / MODULES_PER_PAGE;
     int startIndex = currentPage * MODULES_PER_PAGE;
@@ -92,21 +92,24 @@ void drawModuleScreen(const std::vector<Module*>& modules) {
 
     for (int i = startIndex; i < endIndex; i++) {
         int slot = i - startIndex;
-        tft.drawCentreString(modules[i]->getName().c_str(),
+        spr.drawCentreString(modules[i]->getName().c_str(),
                              SCREEN_WIDTH / 2,
                              yBase + (slot * 30),
                              FONT_SIZE);
     }
 
     if (currentPage > 0)
-        drawButton("Prev", 10, BTN_Y);
+        drawButtonSprite("Prev", 10, BTN_Y);
 
     if (currentPage < totalPages - 1)
-        drawButton("Next", SCREEN_WIDTH - BTN_WIDTH - 10, BTN_Y);
+        drawButtonSprite("Next", SCREEN_WIDTH - BTN_WIDTH - 10, BTN_Y);
 
     char buf[32];
     snprintf(buf, sizeof(buf), "Page %d / %d", currentPage + 1, totalPages);
-    tft.drawCentreString(buf, SCREEN_WIDTH / 2, SCREEN_HEIGHT - 20, FONT_SIZE);
+    spr.drawCentreString(buf, SCREEN_WIDTH / 2, SCREEN_HEIGHT - 20, FONT_SIZE);
+
+    // Push final frame to screen
+    spr.pushSprite(0, 0);
 }
 
 void handleModuleScreenTouch(int x, int y, const std::vector<Module*>& modules) {
@@ -148,8 +151,15 @@ Module* detectModuleTap(int x, int y) {
         int yStart = 80 + (slot * 30);
         int yEnd   = yStart + 25;
 
-        if (y >= yStart && y <= yEnd)
-            return modules[i];
+        if (y >= yStart && y <= yEnd) {
+            int textW = spr.textWidth(modules[i]->getName().c_str(), FONT_SIZE);
+            int xStart = (SCREEN_WIDTH - textW) / 2 - 10;  // 10px padding each side
+            int xEnd   = (SCREEN_WIDTH + textW) / 2 + 10;
+
+            if (x >= xStart && x <= xEnd) {
+                return modules[i];
+            }
+        }
     }
 
     return nullptr;
@@ -158,8 +168,20 @@ Module* detectModuleTap(int x, int y) {
 void initDisplay() {
     tft.init();
     tft.setRotation(1);
-    tft.fillScreen(TFT_WHITE);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+
+    spr.setColorDepth(8); // 8-bit color depth
+
+    Serial.printf("Free heap before sprite: %u\n", ESP.getFreeHeap());
+
+    void* result = spr.createSprite(SCREEN_WIDTH, SCREEN_HEIGHT);
+    if (result == nullptr) {
+        Serial.println("SPRITE CREATION FAILED - out of memory!");
+    }
+
+    Serial.printf("Free heap after sprite: %u\n", ESP.getFreeHeap());
+    Serial.printf("Free heap: %u\n", ESP.getFreeHeap());
+    Serial.printf("Largest free block: %u\n", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    Serial.printf("Largest free block (internal): %u\n", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
 }
 
 void initTouchscreen() {
@@ -185,16 +207,20 @@ void setup() {
     debug_init();
     initSD();
 
-    tft.fillScreen(TFT_WHITE);
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+
+
+
+    spr.fillSprite(TFT_WHITE);
+    spr.setTextColor(TFT_BLACK, TFT_WHITE);
     
-    tft.drawCentreString("PWNKEY!", SCREEN_WIDTH / 2, 30, FONT_SIZE);
+    spr.drawCentreString("PWNKEY!", SCREEN_WIDTH / 2, 30, FONT_SIZE);
     
-    tft.drawCentreString(" /\\_/\\  ", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 40, FONT_SIZE);
-    tft.drawCentreString("( o.o )", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20, FONT_SIZE);
-    tft.drawCentreString("> ^ <", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, FONT_SIZE);
+    spr.drawCentreString(" /\\_/\\  ", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 40, FONT_SIZE);
+    spr.drawCentreString("( o.o )", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20, FONT_SIZE);
+    spr.drawCentreString("> ^ <", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, FONT_SIZE);
     
-    tft.drawCentreString("Touch screen to test", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 40, FONT_SIZE);
+    spr.drawCentreString("Touch screen to test", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 40, FONT_SIZE);
+    spr.pushSprite(0, 0);
     delay(2000);
 
     drawModuleScreen(modules);
@@ -209,15 +235,25 @@ void loop() {
 
         if (p.x != -1) {
             lastTouch = now;
+            Serial.printf("Touch: x=%d y=%d\n", p.x, p.y);
 
             handleModuleScreenTouch(p.x, p.y, modules);
 
             Module* selected = detectModuleTap(p.x, p.y);
             if (selected) {
+                Serial.printf("Selected module: %s\n", selected->getName().c_str());
+                // Clear screen before module runs
+                tft.fillScreen(TFT_WHITE);
+
                 selected->init();
                 selected->run();
                 selected->cleanup();
+                tft.setTextColor(TFT_BLACK, TFT_WHITE);
+
+                // FULL RESET OF SPRITE + MENU
+                spr.fillSprite(TFT_WHITE);
                 drawModuleScreen(modules);
+                spr.pushSprite(0, 0);
             }
         }
     }
@@ -225,14 +261,14 @@ void loop() {
     delay(10);
 }
 
-// Add at the end of your file to satisfy ESP-IDF requirements
+
 extern "C" void app_main() {
-  initArduino();
-  setup();
-  while(true) {
-    loop();
-    yield();
-  }
+    initArduino();
+    setup();
+    while (true) {
+        loop();
+        yield();
+    }
 }
 
 #endif
